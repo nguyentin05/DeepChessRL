@@ -1,9 +1,7 @@
-# -*- coding: utf-8 -*-
 from dataclasses import dataclass
 from typing import Optional
 import chess
 import chess.engine
-
 
 @dataclass
 class StockfishConfig:
@@ -14,16 +12,13 @@ class StockfishConfig:
     elo: int = 1350 # clamp to [800, 2800]
     movetime_s: float = 0.7
 
-
 class StockfishAgent:
     """A thin wrapper that turns Stockfish (UCI) into an 'agents' with select_move()."""
-
 
     def __init__(self, cfg: Optional[StockfishConfig] = None):
         self.cfg = cfg or StockfishConfig()
         self._engine = chess.engine.SimpleEngine.popen_uci(self.cfg.engine_path)
         self._configure()
-
 
     def _configure(self):
         # Build config dict and set tolerantly (some builds lack certain options)
@@ -42,12 +37,10 @@ class StockfishAgent:
             except Exception:
                 pass
 
-
     def select_move(self, board: chess.Board) -> chess.Move:
         """Return best move under the configured time limit."""
         result = self._engine.play(board, chess.engine.Limit(time=self.cfg.movetime_s))
         return result.move
-
 
     def analyse_hint(self, board: chess.Board, time_limit: float = 1.0) -> Optional[chess.Move]:
         try:
@@ -58,13 +51,11 @@ class StockfishAgent:
             return None
         return None
 
-
     def close(self):
         try:
             self._engine.close()
         except Exception:
             pass
-
 
     def __del__(self):
         self.close()
