@@ -1,6 +1,4 @@
-# -*- coding: utf-8 -*-
 import chess
-
 
 def parse_user_move(board: chess.Board, s: str):
     s = (s or "").strip()
@@ -21,7 +19,6 @@ def parse_user_move(board: chess.Board, s: str):
     except Exception:
         pass
     return None
-
 
 def list_legal_moves_san(board: chess.Board):
     out = []

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 import pygame
 import sys
 import chess
@@ -7,11 +6,11 @@ from env import ChessEnv
 from agents.stockfish_agent import StockfishAgent, StockfishConfig
 from utils import parse_user_move
 
-# Kích thước bàn cờ
+#BroadSize
 WIDTH, HEIGHT = 480, 480
 SQ_SIZE = WIDTH // 8
 
-# Load ảnh quân cờ
+#LoadPiece
 def load_images():
     pieces = {}
     names = ["P", "R", "N", "B", "Q", "K"]
@@ -30,7 +29,7 @@ def draw_board(screen):
 def draw_pieces(screen, board, images):
     for r in range(8):
         for c in range(8):
-            sq = chess.square(c, 7-r)  # cột, hàng -> square index
+            sq = chess.square(c, 7-r)  #collumn, row -> square index
             piece = board.piece_at(sq)
             if piece:
                 key = ("w" if piece.color == chess.WHITE else "b") + piece.symbol().upper()
@@ -45,11 +44,10 @@ def main():
     images = load_images()
 
     # Env + Agent
-    env = ChessEnv(agent_color=chess.BLACK)  # human đi Trắng
+    env = ChessEnv(agent_color=chess.BLACK)  #HumanIsWhite
 
     cfg = StockfishConfig(
         engine_path="F:\stockfish\stockfish-windows-x86-64-avx2.exe",
-        # 👈 thay đường dẫn thật trên máy bạn
         threads=2,
         hash_mb=256,
         limit_strength=True,
@@ -77,7 +75,7 @@ def main():
 
                 if selected_square is None:
                     piece = env.board.piece_at(square)
-                    if piece and piece.color == chess.WHITE:  # human đi Trắng
+                    if piece and piece.color == chess.WHITE:  #HumanIsWhite
                         selected_square = square
                 else:
                     move = chess.Move(selected_square, square)
@@ -85,12 +83,12 @@ def main():
                         env.step(move)
                         selected_square = None
 
-                        # Kiểm tra game over
+                        #GameoverCheck
                         if env.board.is_game_over():
                             print(env.board.outcome())
                             continue
 
-                        # Agent đi
+                        #AgentMove
                         mv_a = agent.select_move(env.board)
                         env.step(mv_a)
 

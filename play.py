@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 import argparse
 import sys
 import chess
@@ -13,18 +12,16 @@ from env import ChessEnv
 from utils import parse_user_move, list_legal_moves_san
 from agents.stockfish_agent import StockfishAgent, StockfishConfig
 
-
 HELP_TXT = """
-Lệnh trong khi chơi:
-help : hiện trợ giúp
-board : in bàn cờ hiện tại
-moves : liệt kê các nước hợp lệ (SAN)
-fen : in FEN hiện tại
-resign : đầu hàng
-hint : gợi ý một nước (phân tích nhanh)
-Nhập nước theo SAN (e4, Nf3, O-O, Bxe6+) hoặc UCI (e2e4, g1f3).
+all the commands:
+help : show help table
+board : print the broad
+moves : list all the legal moves
+fen : show FEN
+resign : You have surrendered
+hint : show best move
+Only SAN's type (e4, Nf3, O-O, Bxe6+) or UCI's type (e2e4, g1f3).
 """
-
 
 def parse_args():
     p = argparse.ArgumentParser(description="Play human vs StockfishAgent on a Gym-like ChessEnv")
@@ -38,12 +35,8 @@ def parse_args():
     p.add_argument("--human-white", action="store_true", help="Human plays White (default: human plays Black)")
     return p.parse_args()
 
-
-
-
 def main():
     args = parse_args()
-
 
     agent_color = chess.BLACK if args.human_white else chess.WHITE
     env = ChessEnv(
@@ -54,9 +47,8 @@ def main():
         reward_intermediate=REWARD_INTERMEDIATE,
     )
 
-
     cfg = StockfishConfig(
-        engine_path=args.engine,
+        engine_path="F:\stockfish\stockfish-windows-x86-64-avx2.exe",
         threads=args.threads,
         hash_mb=args.hash,
         limit_strength=args.limit_strength,
@@ -66,17 +58,15 @@ def main():
     try:
         agent = StockfishAgent(cfg)
     except FileNotFoundError:
-        print("❌ Không tìm thấy Stockfish. Dùng --engine trỏ tới file .exe/.bin hoặc thêm vào PATH.")
+        print("❌Stockfish not found. Use --engine to point to .exe/.bin file or add to PATH.")
         sys.exit(1)
 
-
     obs = env.reset()
-    print("Bắt đầu ván cờ. Bạn là", "Trắng" if args.human_white else "Đen")
+    print("the game is started. You're ", "White" if args.human_white else "Black")
     print(HELP_TXT)
     env.render()
 
-
-    # If human plays Black, agent (White) moves first
+    #If human plays Black, agent (White) moves first
     try:
         if not args.human_white:
             mv = agent.select_move(env.board)
@@ -88,16 +78,14 @@ def main():
                 print(_result_line(info))
                 return
 
-
         while True:
             if env.board.is_game_over():
                 info = _ensure_terminal_info(env)
                 print(_result_line(info))
                 break
 
-
-            # Human turn
-            s = input("Nước của bạn (hoặc 'help'): ").strip()
+            #Human turn
+            s = input("Your turn (Or 'help'): ").strip()
             if not s:
                 continue
             cmd = s.lower()
@@ -108,45 +96,45 @@ def main():
                 env.render()
                 continue
             if cmd == "moves":
-                print("Các nước hợp lệ:", ", ".join(list_legal_moves_san(env.board)))
+                print("legal moves:", ", ".join(list_legal_moves_san(env.board)))
                 continue
             if cmd == "fen":
                 print("FEN:", env.board.fen())
                 continue
             if cmd == "resign":
-                # Human resignation ⇒ from env.agent_color perspective, that's a win if agent != human
+                #Human resignation ⇒ from env.agent_color perspective, that's a win if agent != human
                 winner = env.board.turn # the side to move *before* applying resignation; not essential
-                # We just print a message and exit politely
-                print("Bạn đã đầu hàng. Stockfish thắng.")
+                #We just print a message and exit politely
+                print("You surrender. Stockfish wins.")
                 break
             if cmd == "hint":
                 mv_hint = agent.analyse_hint(env.board, time_limit=min(1.5, args.movetime * 2))
                 if mv_hint:
                     try:
-                        print("Gợi ý:", env.board.san(mv_hint), f"(UCI: {mv_hint.uci()})")
+                        print("Hint:", env.board.san(mv_hint), f"(UCI: {mv_hint.uci()})")
                     except Exception:
-                        print("Gợi ý UCI:", mv_hint.uci())
+                        print("Hint UCI:", mv_hint.uci())
                 else:
-                    print("Không lấy được gợi ý.")
+                    print("No hints were given.")
                 continue
 
             mv = parse_user_move(env.board, s)
             if mv is None:
-                print("⛔ Nước không hợp lệ. Gõ 'moves' để xem các nước hợp lệ, hoặc 'help' để trợ giúp.")
+                print("Illegal move. Type 'moves' to see legal moves, or 'help' for assistance.")
                 continue
 
             san_h = env.board.san(mv)
             obs, r, done, info = env.step(mv)
-            print(f"Bạn đi: {san_h} (UCI: {mv.uci()})")
+            print(f"Yours: {san_h} (UCI: {mv.uci()})")
             if done:
                 print(_result_line(info))
                 break
 
-            # Agent turn
+            #Agent turn
             mv_a = agent.select_move(env.board)
             san_a = env.board.san(mv_a)
             obs, r, done, info = env.step(mv_a)
-            print(f"Stockfish đi: {san_a} (UCI: {mv_a.uci()})")
+            print(f"Stockfish: {san_a} (UCI: {mv_a.uci()})")
             env.render()
             if done:
                 print(_result_line(info))
@@ -155,24 +143,24 @@ def main():
         agent.close()
 
 def _ensure_terminal_info(env: ChessEnv):
-    # Helper to build a terminal-like info if already game over
+    #Helper to build a terminal-like info if already game over
     oc = env.board.outcome()
     if oc is None:
         return {"done": False}
     res = env.board.result()
     term = oc.termination.name if oc.termination else "UNKNOWN"
     if oc.winner is True:
-        who = "Trắng thắng"
+        who = "White won"
     elif oc.winner is False:
-        who = "Đen thắng"
+        who = "Black won"
     else:
-        who = "Hòa"
+        who = "Slalement"
     return {"done": True, "result": res, "who": who, "termination": term}
 
 def _result_line(info):
     if not info.get("done"):
-        return "Ván chưa kết thúc."
-    return f"Kết quả: {info.get('result')} — {info.get('who')} ({info.get('termination')})."
+        return "The game is not over."
+    return f"Result: {info.get('result')} — {info.get('who')} ({info.get('termination')})."
 
 if __name__ == "__main__":
     main()
