@@ -1,23 +1,15 @@
-#-*- coding: utf-8 -*-
 from typing import Dict, Tuple, Optional
 import chess
 
-
 Color = bool # chess.WHITE or chess.BLACK
-
 
 class ChessEnv:
     """A lightweight Gym-like chess environment using python-chess.
-
-
     Observations: FEN string (simple & framework-agnostic).
     Actions: chess.Move objects (caller ensures legality).
-
-
     Reward (sparse): +1 win / -1 loss / 0 draw / 0 otherwise,
     computed from the perspective of `agent_color`.
     """
-
 
     def __init__(self, agent_color: Color = chess.BLACK,
     reward_win: float = 1.0,
@@ -31,13 +23,11 @@ class ChessEnv:
         self._r_mid = reward_intermediate
         self.board = chess.Board()
 
-
     # --- core API ---
     def reset(self) -> str:
         """Reset board to the initial position. Returns initial observation (FEN)."""
         self.board = chess.Board()
         return self._observation()
-
 
     def step(self, move: chess.Move) -> Tuple[str, float, bool, Dict]:
         """Apply one legal move. Returns (obs, reward, done, info)."""
@@ -45,14 +35,12 @@ class ChessEnv:
             raise ValueError("Illegal move for current position: %s" % move)
         self.board.push(move)
 
-
         # Terminal check
         if self.board.is_game_over():
             reward = self._terminal_reward()
             return self._observation(), reward, True, self._terminal_info()
         else:
             return self._observation(), self._r_mid, False, {}
-
 
     # --- helpers ---
     def legal_moves(self):
@@ -71,8 +59,8 @@ class ChessEnv:
         print(self.__str__())
 
     def __str__(self) -> str:
-        turn = "Trắng" if self.board.turn == chess.WHITE else "Đen"
-        return f"\n{self.board}\nLượt: {turn}\n"
+        turn = "White" if self.board.turn == chess.WHITE else "Black"
+        return f"\n{self.board}\nTurn: {turn}\n"
 
     def _observation(self) -> str:
         return self.board.fen()
@@ -93,9 +81,9 @@ class ChessEnv:
         winner = oc.winner  # True/False/None
         term = oc.termination.name if oc.termination else "UNKNOWN"
         if winner is True:
-            who = "Trắng thắng"
+            who = "White won"
         elif winner is False:
-            who = "Đen thắng"
+            who = "Black won"
         else:
-            who = "Hòa"
+            who = "Stalement"
         return {"done": True, "result": res, "who": who, "termination": term}
