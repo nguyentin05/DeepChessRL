@@ -85,5 +85,5 @@ class ChessEnv:
         elif winner is False:
             who = "Black won"
         else:
-            who = "Stalement"
+            who = "Stalement" 
         return {"done": True, "result": res, "who": who, "termination": term}

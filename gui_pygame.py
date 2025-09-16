@@ -1,12 +1,48 @@
 # -*- coding: utf-8 -*-
+import argparse
 import pygame
 import sys
 import time
 import chess
-
+from agents.bc_agent import BCAgent, BCConfig
+from agents.factory import create_agent, available_agents
 from env import ChessEnv
 from agents.stockfish_agent import StockfishAgent, StockfishConfig
 
+
+def _parse_weights(s: str | None) -> dict[str, float] | None:
+    if not s:
+        return None
+    out = {}
+    for kv in s.split(","):
+        kv = kv.strip()
+        if not kv:
+            continue
+        if "=" not in kv:
+            continue
+        k, v = kv.split("=", 1)
+        try:
+            out[k.strip()] = float(v.strip())
+        except ValueError:
+            pass
+    return out or None
+
+def _parse_args():
+    p = argparse.ArgumentParser()
+    p.add_argument("--agent", default="heuristic", choices=available_agents(),
+                   help="Chọn agent: " + ", ".join(available_agents()))
+    p.add_argument("--ai-color", default="black", choices=["white", "black"],
+                   help="AI đánh quân nào (mặc định: black)")
+    p.add_argument("--depth", type=int, default=2, help="Độ sâu tìm kiếm (Heuristic)")
+    p.add_argument("--seed", type=int, default=None, help="Seed cho random tiebreak")
+    p.add_argument("--weights", type=str, default=None,
+                   help='Trọng số heuristic, ví dụ: "material=1.0,mobility=0.12,center=0.05,king_safety=0.12,pawn_structure=0.05,tempo=0.02"')
+    p.add_argument("--ckpt", type=str, default=None, help="Đường dẫn checkpoint .pt của BC")
+    p.add_argument("--bc-in-ch", type=int, default=14)
+    p.add_argument("--bc-action-dim", type=int, default=4864)
+    p.add_argument("--bc-temp", type=float, default=1.0)
+    p.add_argument("--bc-topk", type=int, default=None)
+    return p.parse_args()
 # ====== Cấu hình giao diện ======
 WIDTH, HEIGHT = 520, 520              # tăng nhẹ để có viền cho overlay
 BOARD_SIZE = 480
@@ -177,24 +213,55 @@ def main():
     clock = pygame.time.Clock()
     images = load_images()
 
-    env = ChessEnv(agent_color=chess.BLACK)  # người (White), agent (Black)
-    cfg = StockfishConfig(
-        engine_path="stockfish",  # đổi sang path tuyệt đối nếu chưa thêm PATH
-        threads=2, hash_mb=256, limit_strength=True, elo=1200, movetime_s=0.7
-    )
-    agent = StockfishAgent(cfg)
+    # === ADD: đọc tham số CLI ===
+    args = _parse_args()
+    weights = _parse_weights(args.weights)
+    ai_color = chess.WHITE if args.ai_color == "white" else chess.BLACK
+    human_color = chess.BLACK if ai_color == chess.WHITE else chess.WHITE
+
+    # === MODIFY: tạo env theo màu AI ===
+    env = ChessEnv(agent_color=ai_color)  # AI color theo tham số
+
+    # === MODIFY: khởi tạo agent (stockfish hoặc factory) ===
+    if args.agent == "stockfish":
+        cfg = StockfishConfig(
+            engine_path=r"F:\Engines\stockfish\stockfish-windows-x86-64-avx2.exe",
+            threads=2, hash_mb=256, limit_strength=True, elo=1200, movetime_s=0.7
+        )
+        agent = StockfishAgent(cfg)
+
+    elif args.agent == "heuristic":
+        agent = create_agent("heuristic", depth=args.depth, seed=args.seed, weights=weights)
+
+    elif args.agent == "bc":
+        # === CREATE FROM CHECKPOINT ===
+        agent = create_agent(
+            "bc",
+            in_channels=args.bc_in_ch,
+            action_dim=args.bc_action_dim,
+            device="cpu",  # đổi "cuda" nếu bạn muốn & có GPU
+            temperature=args.bc_temp,
+            topk=args.bc_topk,
+            checkpoint=args.ckpt,  # <— CHỖ TRUYỀN CHECKPOINT
+        )
+
+    else:
+        agent = create_agent(args.agent)
 
     selected_sq = None
     legal_targets = set()
     last_move = None
+    ai_thinking = False  # chặn AI đi 2 lần trong 1 frame
 
     running = True
     while running:
+        # --- RENDER ---
         draw_board(screen, last_move=last_move)
         draw_pieces(screen, env.board, images)
         draw_selection_highlight(screen, selected_sq, legal_targets)
         pygame.display.flip()
 
+        # --- EVENTS ---
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
@@ -211,10 +278,10 @@ def main():
                 row = (y - MARGIN) // SQ_SIZE
                 square = chess.square(col, 7 - row)
 
-                # chọn quân
+                # chọn quân (CẬP NHẬT: người chơi = màu đối nghịch với AI)
                 if selected_sq is None:
                     piece = env.board.piece_at(square)
-                    if piece and piece.color == chess.WHITE:
+                    if piece and piece.color == human_color:
                         selected_sq = square
                         legal_targets = legal_targets_for(env.board, selected_sq)
                 else:
@@ -223,17 +290,23 @@ def main():
 
                     if square in legal_targets:
                         # promotion?
+                        promo = None
                         if is_pawn_promotion(env.board, mv):
-                            promo = choose_promotion(screen, color_is_white=True, images=images)
+                            promo = choose_promotion(
+                                screen,
+                                color_is_white=(human_color == chess.WHITE),
+                                images=images
+                            )
                             mv = chess.Move(selected_sq, square, promotion=promo)
 
-                        # Xác thực nước nằm trong legal_moves (bao gồm promotion)
+                        # Xác thực nước hợp lệ (bao gồm promotion)
                         if mv not in env.board.legal_moves:
                             # nếu user chọn đích đúng nhưng promotion chưa khớp,
                             # cố match với nước hợp lệ có cùng from/to
                             for lm in env.board.legal_moves:
                                 if lm.from_square == selected_sq and lm.to_square == square:
-                                    mv = lm; break
+                                    mv = lm
+                                    break
 
                         if mv in env.board.legal_moves:
                             prev = env.board.copy()
@@ -242,23 +315,8 @@ def main():
                             animate_move(screen, prev, mv, after, images, clock)
                             last_move = mv
 
-                            # xong lượt người → kiểm tra kết thúc
-                            if env.board.is_game_over():
-                                print(env.board.outcome()); selected_sq=None; legal_targets=set(); continue
-
-                            # lượt agent
-                            mv_a = agent.select_move(env.board)
-                            prev = env.board.copy()
-                            env.board.push(mv_a)
-                            after = env.board.copy()
-                            animate_move(screen, prev, mv_a, after, images, clock)
-                            last_move = mv_a
-
                             selected_sq = None
                             legal_targets = set()
-
-                            if env.board.is_game_over():
-                                print(env.board.outcome())
                         else:
                             # đích hợp lệ nhưng thất bại (hiếm) -> reset chọn
                             selected_sq = None
@@ -266,18 +324,44 @@ def main():
                     else:
                         # click vào quân khác cùng màu -> đổi selection
                         piece = env.board.piece_at(square)
-                        if piece and piece.color == chess.WHITE:
+                        if piece and piece.color == human_color:
                             selected_sq = square
                             legal_targets = legal_targets_for(env.board, selected_sq)
                         else:
                             selected_sq = None
                             legal_targets = set()
 
+        # --- TURN OF AI (tự động) ---
+        if not env.board.is_game_over():
+            if env.board.turn == ai_color and not ai_thinking:
+                ai_thinking = True
+                try:
+                    mv_a = agent.select_move(env.board)
+                    if mv_a not in env.board.legal_moves:
+                        raise ValueError("Agent returned an illegal move.")
+                    prev = env.board.copy()
+                    env.board.push(mv_a)
+                    after = env.board.copy()
+                    animate_move(screen, prev, mv_a, after, images, clock)
+                    last_move = mv_a
+                except Exception as e:
+                    print(f"[AI ERROR] {e}")
+                finally:
+                    ai_thinking = False
+        else:
+            print(env.board.outcome())
+
         clock.tick(FPS)
 
     pygame.quit()
-    agent.close()
+    # an toàn: chỉ close nếu agent có phương thức này (Stockfish)
+    if hasattr(agent, "close"):
+        try:
+            agent.close()
+        except Exception:
+            pass
     sys.exit()
+
 
 if __name__ == "__main__":
     main()
