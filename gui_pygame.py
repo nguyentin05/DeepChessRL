@@ -4,8 +4,6 @@ import pygame
 import sys
 import time
 import chess
-from agents.bc_agent import BCAgent, BCConfig
-from agents.factory import create_agent, available_agents
 from env import ChessEnv
 from agents.stockfish_agent import StockfishAgent, StockfishConfig
 
@@ -29,8 +27,6 @@ def _parse_weights(s: str | None) -> dict[str, float] | None:
 
 def _parse_args():
     p = argparse.ArgumentParser()
-    p.add_argument("--agent", default="heuristic", choices=available_agents(),
-                   help="Chọn agent: " + ", ".join(available_agents()))
     p.add_argument("--ai-color", default="black", choices=["white", "black"],
                    help="AI đánh quân nào (mặc định: black)")
     p.add_argument("--depth", type=int, default=2, help="Độ sâu tìm kiếm (Heuristic)")
@@ -223,30 +219,12 @@ def main():
     env = ChessEnv(agent_color=ai_color)  # AI color theo tham số
 
     # === MODIFY: khởi tạo agent (stockfish hoặc factory) ===
-    if args.agent == "stockfish":
-        cfg = StockfishConfig(
-            engine_path=r"F:\Engines\stockfish\stockfish-windows-x86-64-avx2.exe",
-            threads=2, hash_mb=256, limit_strength=True, elo=1200, movetime_s=0.7
-        )
-        agent = StockfishAgent(cfg)
+    cfg = StockfishConfig(
+        engine_path=r"D:\stockfish\stockfish-windows-x86-64-avx2.exe",
+        threads=2, hash_mb=256, limit_strength=True, elo=1200, movetime_s=0.7
+    )
+    agent = StockfishAgent(cfg)
 
-    elif args.agent == "heuristic":
-        agent = create_agent("heuristic", depth=args.depth, seed=args.seed, weights=weights)
-
-    elif args.agent == "bc":
-        # === CREATE FROM CHECKPOINT ===
-        agent = create_agent(
-            "bc",
-            in_channels=args.bc_in_ch,
-            action_dim=args.bc_action_dim,
-            device="cpu",  # đổi "cuda" nếu bạn muốn & có GPU
-            temperature=args.bc_temp,
-            topk=args.bc_topk,
-            checkpoint=args.ckpt,  # <— CHỖ TRUYỀN CHECKPOINT
-        )
-
-    else:
-        agent = create_agent(args.agent)
 
     selected_sq = None
     legal_targets = set()

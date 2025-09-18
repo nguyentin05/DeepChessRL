@@ -1,6 +1,0 @@
-import chess
-from .base_agent import BaseAgent
-
-class RandomAgent(BaseAgent):
-    def __init__(self, seed: int | None = None) -> None: ...
-    def select_move(self, board: chess.Board) -> chess.Move: ...
